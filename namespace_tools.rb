@@ -24,11 +24,16 @@ module NamespaceTools
     zrange zrevrange zrangebyscore zinterstore zunionstore
   ]
 
+  SPECIAL_HANDLING = {
+    'keys' => { error: "KEYS is an expensive command. It needs to go through the whole database. Its use is not recommended (and thus disabled in try.redis)." }
+  }
+
   def parse_command namespace, cmd, *args
     cmd = cmd.downcase
 
-    if cmd == "keys"
-      return { error: "KEYS is an expensive command. It needs to go through the whole database. Its use is not recommended (and thus disabled in try.redis)." }
+    # Special error message for keys
+    if (msg=SPECIAL_HANDLING[cmd])
+      return msg
     end
 
     command = ALL_COMMANDS[cmd.downcase]
@@ -41,23 +46,26 @@ module NamespaceTools
     keys = command.get_key_positions args
     keys.each { |i| args[i] and args[i] = "#{namespace}:#{args[i]}" }
 
-    if cmd == "scan"
-      i = 0
-      found = false
-      while i < args.size
-        if args[i].downcase == "match"
-          found = true
-          args[i+1] = "#{namespace}:#{args[i+1]}"
-          i += 2
-          next
-        end
-        i += 1
-      end
-
-      args << "match" << "#{namespace}:*" unless found
-    end
+    args = special_case_scan(namespace, args) if cmd == "scan"
 
     [cmd, *args]
+  end
+
+  def special_case_scan namespace, args
+    i = 0
+    found = false
+    while i < args.size
+      if args[i].downcase == "match"
+        found = true
+        args[i+1] = "#{namespace}:#{args[i+1]}"
+        i += 2
+        next
+      end
+      i += 1
+    end
+
+    args << "match" << "#{namespace}:*" unless found
+    args
   end
 
   # Transform redis response from ruby to redis-cli like format
