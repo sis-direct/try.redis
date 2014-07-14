@@ -7,26 +7,9 @@ module NamespaceTools
    SYNTAX_ERROR = {error: "ERR Syntax error"}.freeze
    ARGUMENT_ERROR = -> cmd { {error: "ERR wrong number of arguments for '#{cmd}' command" } }
 
-  # These are manually converted to integer output
-  INTEGER_COMMANDS = %w[
-    incr incrby decr decrby del ttl llen
-    sadd zadd
-    zremrangebyrank
-    hincrby hdel
-    lpush rpush lpushx rpushx lrem
-    bitpos
-    strlen
-    pfadd pfcount
-  ]
-
-  # These commands return a nested array in ruby, need to be flattened
-  FLATTEN_COMMANDS = %w[
-    zrange zrevrange zrangebyscore zinterstore zunionstore
-  ]
-
-  SPECIAL_HANDLING = {
-    'keys' => { error: "KEYS is an expensive command. It needs to go through the whole database. Its use is not recommended (and thus disabled in try.redis)." }
-  }
+   SPECIAL_HANDLING = {
+     'keys' => { error: "KEYS is an expensive command. It needs to go through the whole database. Its use is not recommended (and thus disabled in try.redis)." }
+   }
 
   def parse_command namespace, cmd, *args
     cmd = cmd.downcase
@@ -81,12 +64,7 @@ module NamespaceTools
     end
 
     if cmd == 'ping' && input == 'PONG'
-      return "PONG"
-    end
-
-    # Atleast hscan and zscan return nested arrays here.
-    if ['scan', 'hscan', 'zscan', 'sscan'].include?(cmd)
-      input[1].flatten!
+      return 'PONG'
     end
 
     case input
@@ -94,40 +72,16 @@ module NamespaceTools
       '(nil)'
     when 'OK'
       'OK'
-    when true
-      if cmd == 'set'
-        return 'OK'
-      else
-        '(integer) 1'
-      end
-    when false
-      if cmd == 'set'
-        return '(nil)'
-      else
-        '(integer) 0'
-      end
+    when Integer
+      "(integer) #{input}"
     when Array
       if input.empty?
-        "(empty list or set)"
+        '(empty list or set)'
       else
         str = ""
         size = input.size.to_s.size
         input.each_with_index do |v, i|
           str << "#{(i+1).to_s.rjust(size)}) #{to_redis_output v}\n"
-        end
-        str
-      end
-    when Hash
-      if input.empty?
-        "(empty list or set)"
-      else
-        str = ""
-        size = input.size.to_s.size
-        i = 0
-        input.each do |(k, v)|
-          str << "#{(i+1).to_s.rjust(size)}) #{to_redis_output k}\n"
-          str << "#{(i+2).to_s.rjust(size)}) #{to_redis_output v}\n"
-          i += 2
         end
         str
       end

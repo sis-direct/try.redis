@@ -123,17 +123,7 @@ class TryRedis < Sinatra::Base
         raise result
       end
 
-      if INTEGER_COMMANDS.include?(argv[0])
-        result = "(integer) #{result}"
-      else
-        if FLATTEN_COMMANDS.include?(argv[0])
-          result = result.flatten
-        end
-
-        result = to_redis_output result, argv[0], argv[1]
-      end
-
-      result
+      to_redis_output result, argv[0]
     end
   ensure
     begin
