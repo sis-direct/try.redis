@@ -1,26 +1,11 @@
 # encoding: utf-8
 
 require_relative 'lib/shell_escape'
+require_relative 'lib/redis_commands'
 
 module NamespaceTools
-  SYNTAX_ERROR = {error: "ERR Syntax error"}.freeze
-  ARGUMENT_ERROR = -> cmd { {error: "ERR wrong number of arguments for '#{cmd}' command"} }
-
-  ALLOWED_COMMANDS = %w[
-    append echo getrange hmget hsetnx incrbyfloat
-    hincrbyfloat decr decrby del discard exec linsert lpushx persist pexpire
-    pexpireat ping pttl psetex rpushx setex setrange strlen time zcount
-    zrank zremrangebyrank zrevrangebyscore zrevrank exists expire expireat get
-    getset hdel hexists hget hgetall hincrby hkeys hlen hmset hset hvals incr
-    incrby info keys lindex llen lpop lpush lrange lrem lset ltrim mget mset
-    msetnx multi rename renamenx rpop rpoplpush rpush sadd scard sdiff
-    sdiffstore set setnx sinter sinterstore sismember smembers smove sort spop
-    srandmember srem sunion sunionstore ttl type zadd zcard zincrby zrange
-    zrangebyscore zrem zremrangebyscore zrevrange zscore
-    scan sscan hscan zscan
-    bitcount bitop getbit setbit bitpos
-    pfadd pfcount pfmerge
-  ]
+   SYNTAX_ERROR = {error: "ERR Syntax error"}.freeze
+   ARGUMENT_ERROR = -> cmd { {error: "ERR wrong number of arguments for '#{cmd}' command" } }
 
   # These are manually converted to integer output
   INTEGER_COMMANDS = %w[
@@ -39,167 +24,40 @@ module NamespaceTools
     zrange zrevrange zrangebyscore zinterstore zunionstore
   ]
 
-  def parse_command(ns, command, *args)
-    command = command.to_s.downcase
+  def parse_command namespace, cmd, *args
+    cmd = cmd.downcase
 
-    if ALLOWED_COMMANDS.include?(command)
-      case command
-      when "keys"
-        if args.size != 1
-          return ARGUMENT_ERROR[command]
+    if cmd == "keys"
+      return { error: "KEYS is an expensive command. It needs to go through the whole database. Its use is not recommended (and thus disabled in try.redis)." }
+    end
+
+    command = ALL_COMMANDS[cmd.downcase]
+    return nil unless command
+
+    unless command.check_arity *args
+      return ARGUMENT_ERROR[cmd]
+    end
+
+    keys = command.get_key_positions args
+    keys.each { |i| args[i] and args[i] = "#{namespace}:#{args[i]}" }
+
+    if cmd == "scan"
+      i = 0
+      found = false
+      while i < args.size
+        if args[i].downcase == "match"
+          found = true
+          args[i+1] = "#{namespace}:#{args[i+1]}"
+          i += 2
+          next
         end
-      when "bitpos"
-        if args.size < 2
-          return ARGUMENT_ERROR[command]
-        end
-
-        # Manually namespace this, redis-namespace does not know it.
-        args[0] = add_namespace(ns, args[0])
-        return [ command, *args ]
-      when "pfadd", "pfcount"
-        if args.size < 1
-          return ARGUMENT_ERROR[command]
-        end
-
-        # Manually namespace this, redis-namespace does not know it.
-        args[0] = add_namespace(ns, args[0])
-        return [ command, *args ]
-      when "pfmerge"
-        if args.size < 2
-          return ARGUMENT_ERROR[command]
-        end
-        # Manually namespace this, redis-namespace does not know it.
-        args.map! { |arg|
-          add_namespace(ns, arg)
-        }
-        return [ command, *args ]
-      when "zadd", "sadd", "zrem", "srem"
-        return [ command, args.shift, args ]
-      when "sort"
-        return ARGUMENT_ERROR[command] if args.empty?
-
-        key    = args.shift
-        params = {}
-
-        while keyword = args.shift
-          case keyword.downcase
-          when "by", "get", "store"
-            k = keyword.intern
-            params[k] = args.shift
-          when "limit"
-            params[:limit] = [ args.shift.to_i, args.shift.to_i ]
-          when "asc", "desc", "alpha"
-            params[:order] ||= ""
-            params[:order] << " "
-            params[:order] << keyword
-          end
-        end
-
-        return [ command, key, params ]
-      when "scan"
-        return ARGUMENT_ERROR[command] if args.empty?
-
-        cursor, params = extract_scan_arguments(ns, args)
-
-        return [ command, cursor, params ]
-      when "hscan", "sscan", "zscan"
-        return ARGUMENT_ERROR[command] if args.size < 2
-
-        # Explicit namespacing here as redis-namespace fails to do the proper thing
-        key = add_namespace(ns, args.shift)
-        cursor, params = extract_scan_arguments(nil, args)
-
-        return [ command, key, cursor, params ]
-      when "zrange", "zrevrange"
-        # Only the first argument is a key, but special argument at the end.
-
-        head = args.first
-        tail = args[1..-1] || []
-        options = {}
-
-        if tail.last && tail.last.downcase == "withscores"
-          tail.pop
-          options[:withscores] = true
-        end
-
-        return [ command, head, *tail, options ]
-      when "zrangebyscore"
-        # Only the first argument is a key, but special arguments at the end.
-
-        head = args.shift
-
-        tail = [args.shift, args.shift]
-        options = {}
-        while keyword = args.shift
-          case keyword.downcase
-          when "limit"
-            options[:limit] = [ args.shift.to_i, args.shift.to_i ]
-          when "withscores"
-            options[:withscores] = true
-          else
-            return SYNTAX_ERROR
-          end
-        end
-
-        return [ command, head, *tail, options ]
-      when "set"
-        head = args.shift
-
-        tail = [args.shift]
-        options = {}
-        while keyword = args.shift
-          case keyword.downcase
-          when "ex"
-            options[:ex] = args.shift
-            return SYNTAX_ERROR unless options[:ex]
-          when "px"
-            options[:px] = args.shift
-            return SYNTAX_ERROR unless options[:px]
-          when "nx"
-            options[:nx] = true
-          when "xx"
-            options[:xx] = true
-          else
-            return SYNTAX_ERROR
-          end
-        end
-
-        if options.empty?
-          return [ command, head, *tail ]
-        else
-          return [ command, head, *tail, options ]
-        end
+        i += 1
       end
 
-      [command, *args]
-    end
-  end
-
-  def extract_scan_arguments ns, args
-    cursor = args.shift
-    params = {}
-
-    while keyword = args.shift
-      case keyword.downcase
-      when "match"
-        params[:match] = add_namespace(ns, args.shift)
-      when "count"
-        params[:count] = args.shift
-      end
+      args << "match" << "#{namespace}:*" unless found
     end
 
-    params[:match] ||= "#{ns}:*" if ns
-
-    [cursor, params]
-  end
-
-  def add_namespace(namespace, key)
-    return key unless namespace
-
-    case key
-    when String then "#{namespace}:#{key}"
-    when Array  then key.map {|k| add_namespace(namespace, k)}
-    end
+    [cmd, *args]
   end
 
   # Transform redis response from ruby to redis-cli like format
