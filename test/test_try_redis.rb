@@ -23,10 +23,15 @@ class TestTryRedis < MiniTest::Test
   # Helper commands
   def command arg, session_id=nil
     session_id ||= @session_id if @session_id
-    url = "/eval?command=#{CGI.escape arg}"
+    @last_command = arg
+    url = "/eval?command=#{CGI.escape @last_command}"
     url << "&session_id=#{session_id}" if session_id
     get url
     assert last_response.ok?
+  end
+
+  def last_command
+    @last_command
   end
 
   def response_was matcher
@@ -35,7 +40,7 @@ class TestTryRedis < MiniTest::Test
 
   def body_was key, matcher
     json = JSON.parse last_response.body
-    assert_match matcher, json[key.to_s]
+    assert_match matcher, json[key.to_s], "Last Command: '#{last_command}', Key: '#{key}', Body: #{json.inspect}"
   end
 
   def command_with_body comm, args={}
@@ -43,11 +48,6 @@ class TestTryRedis < MiniTest::Test
 
     args.each do |k,v|
       body_was k, v
-    end
-
-    if args[:error].nil?
-      json = JSON.parse last_response.body
-      assert_equal nil, json['error']
     end
   end
   # Helper commands end
@@ -70,8 +70,8 @@ class TestTryRedis < MiniTest::Test
   end
 
   def test_eval_returns_argument_error
-    command "keys"
-    body_was :error, "ERR wrong number of arguments for 'keys' command"
+    command "set"
+    body_was :error, "ERR wrong number of arguments for 'set' command"
   end
 
   def test_eval_returns_error_for_unknown
@@ -349,7 +349,6 @@ class TestTryRedis < MiniTest::Test
   def test_pfmerge_wrong_argument_count
     target_version "2.9.11" do
       command_with_body "pfmerge", error: /ERR wrong number of arguments for 'pfmerge' command/
-      command_with_body "pfmerge foo", error: /ERR wrong number of arguments for 'pfmerge' command/
     end
   end
 
