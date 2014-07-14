@@ -60,7 +60,6 @@ BLOCKED_COMMANDS = [
   "select", "bgrewriteaof", "cluster", "debug", "flushdb", "dump", "move",
   "readonly", "evalsha", "unsubscribe", "eval", "pubsub", "object", "publish",
 ]
-COMMANDS_SPECIAL_HANDLING = [ "multi", "exec", "keys", ]
 
 # name     - Command name to call
 # arity    - Arity of the command, negative means >= |N|
