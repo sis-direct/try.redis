@@ -1,13 +1,12 @@
 #!/usr/bin/env ruby
 # encoding: utf-8
 
+# These are nearly 1:1 translations from the original Redis source
 COMMANDS_WITH_KEY_PROC = {
   "zunionstore" => proc{|*args|
     argc = args.size
     num = args[1].to_i
-    if num > argc-2
-      return []
-    end
+    return [] if num > (argc-2)
 
     keys = [0]
     0.upto(num-1) { |i|
@@ -35,21 +34,8 @@ COMMANDS_WITH_KEY_PROC = {
     end
     keys
   },
-  "eval" => proc{|*args|
-    argc = args.size
-
-    num = args[1].to_i
-    if num > argc-2
-      return []
-    end
-
-    keys = []
-    0.upto(num-1) { |i| keys << 2+i }
-    keys
-  },
 }
 COMMANDS_WITH_KEY_PROC["zunioninter"] = COMMANDS_WITH_KEY_PROC["zunionstore"]
-COMMANDS_WITH_KEY_PROC["evalsha"]     = COMMANDS_WITH_KEY_PROC["eval"]
 
 BLOCKED_COMMANDS = [
   "brpoplpush", "pfselftest", "subscribe", "migrate", "psync", "latency",
@@ -60,7 +46,6 @@ BLOCKED_COMMANDS = [
   "select", "bgrewriteaof", "cluster", "debug", "flushdb", "dump", "move",
   "readonly", "evalsha", "unsubscribe", "eval", "pubsub", "object", "publish",
 ]
-COMMANDS_SPECIAL_HANDLING = [ "multi", "exec", "keys", ]
 
 # name     - Command name to call
 # arity    - Arity of the command, negative means >= |N|
@@ -83,9 +68,7 @@ Command = Struct.new(:name, :arity, :flags, :firstkey, :lastkey, :keystep) do
     if self.has_keys_proc?
       self.keys_proc *args
     else
-      if self.firstkey == 0
-        return []
-      end
+      return [] if self.firstkey == 0
 
       last = self.lastkey
       last = args.size+(last+1) if last < 0
