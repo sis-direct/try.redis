@@ -35,7 +35,7 @@ COMMANDS_WITH_KEY_PROC = {
     keys
   },
 }
-COMMANDS_WITH_KEY_PROC["zunioninter"] = COMMANDS_WITH_KEY_PROC["zunionstore"]
+COMMANDS_WITH_KEY_PROC["zinterstore"] = COMMANDS_WITH_KEY_PROC["zunionstore"]
 
 BLOCKED_COMMANDS = [
   "brpoplpush", "pfselftest", "subscribe", "migrate", "psync", "latency",
