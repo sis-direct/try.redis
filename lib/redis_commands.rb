@@ -83,7 +83,7 @@ Command = Struct.new(:name, :arity, :flags, :firstkey, :lastkey, :keystep) do
 
   def extract_keys args, pos=nil
     pos ||= get_key_positions args
-    pos.map {|p| args[p] }
+    pos.map {|p| args[p] }.compact
   end
 
   def check_arity *args
