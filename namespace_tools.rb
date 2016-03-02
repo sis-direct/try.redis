@@ -177,6 +177,10 @@ module NamespaceTools
         else
           return [ command, head, *tail, options ]
         end
+      when "lpush", "rpush"
+        head = args.shift
+        tail = [*args]
+        return [command, head, tail]
       end
 
       [command, *args]

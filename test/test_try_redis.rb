@@ -384,4 +384,15 @@ class TestTryRedis < MiniTest::Test
       command_with_body "zlexcount a b c d", error: /ERR wrong number of arguments for 'zlexcount' command/
     end
   end
+
+  def test_lpush_multiple_args
+    set_session "push"
+
+    command_with_body "LPUSH mylist a b c", response: "(integer) 3"
+    assert_equal ['c', 'b', 'a'], @r.lrange("push:mylist", 0, -1)
+
+    @r.del("push:mylist")
+    command_with_body "RPUSH mylist a b c", response: "(integer) 3"
+    assert_equal ['a', 'b', 'c'], @r.lrange("push:mylist", 0, -1)
+  end
 end
