@@ -55,7 +55,7 @@ class TestTryRedis < MiniTest::Test
   def test_homepage
     get '/'
     assert last_response.ok?
-    assert_match /Try Redis/, last_response.body
+    assert_match(/Try Redis/, last_response.body)
   end
 
   def test_eval_returns_set_value
@@ -109,7 +109,7 @@ class TestTryRedis < MiniTest::Test
 
   def test_eval_responds_to_next
     command "next"
-    response_was /{"notification":"<p>Redis is what is called a key-value store/
+    response_was(/{"notification":"<p>Redis is what is called a key-value store/)
     body_was :notification, "<p>Redis is what is called a key-value store"
   end
 
