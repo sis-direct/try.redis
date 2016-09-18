@@ -55,7 +55,7 @@ class TestTryRedis < MiniTest::Test
   def test_homepage
     get '/'
     assert last_response.ok?
-    assert_match /Try Redis/, last_response.body
+    assert_match(/Try Redis/, last_response.body)
   end
 
   def test_eval_returns_set_value
@@ -109,7 +109,7 @@ class TestTryRedis < MiniTest::Test
 
   def test_eval_responds_to_next
     command "next"
-    response_was /{"notification":"<p>Redis is what is called a key-value store/
+    response_was(/{"notification":"<p>Redis is what is called a key-value store/)
     body_was :notification, "<p>Redis is what is called a key-value store"
   end
 
@@ -383,5 +383,16 @@ class TestTryRedis < MiniTest::Test
       command_with_body "zlexcount a", error: /ERR wrong number of arguments for 'zlexcount' command/
       command_with_body "zlexcount a b c d", error: /ERR wrong number of arguments for 'zlexcount' command/
     end
+  end
+
+  def test_lpush_multiple_args
+    set_session "push"
+
+    command_with_body "LPUSH mylist a b c", response: "(integer) 3"
+    assert_equal ['c', 'b', 'a'], @r.lrange("push:mylist", 0, -1)
+
+    @r.del("push:mylist")
+    command_with_body "RPUSH mylist a b c", response: "(integer) 3"
+    assert_equal ['a', 'b', 'c'], @r.lrange("push:mylist", 0, -1)
   end
 end
